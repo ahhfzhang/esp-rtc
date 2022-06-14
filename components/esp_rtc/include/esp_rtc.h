@@ -22,15 +22,12 @@
  *
  */
 
-#ifndef _ESP_RTC_H
-#define _ESP_RTC_H
+#ifndef _ESP_RTC_H_
+#define _ESP_RTC_H_
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#define DEFAULT_RTC_G711_BUFSZ      (160)
-#define DEFAULT_RTC_JPEG_BUFSZ      (100*1024)
 
 typedef struct _esp_rtc_handle *esp_rtc_handle_t;
 
@@ -78,6 +75,7 @@ typedef struct {
     int     width;      /*!< Video width */
     int     height;     /*!< Video height */
     int     fps;        /*!< Video fps */
+    int     len;        /*!< Video len */
 } esp_rtc_video_info;
 
 /**

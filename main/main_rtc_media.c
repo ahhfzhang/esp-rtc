@@ -48,10 +48,10 @@
 
 #define TAG	        "ESP_RTC_MEDIA"
 
+#define SOFTWARE_ENC
 #define VIDEO_FPS                   15
-#define VIDEO_WIDTH                 320
-#define VIDEO_HEIGHT                240
-#define VIDEO_SIZE                  20*1024
+#define VIDEO_FRAME_SIZE            FRAMESIZE_QVGA
+#define VIDEO_SIZE                  50*1024
 
 #define I2S_SAMPLE_RATE             8000
 #define I2S_CHANNELS                1
@@ -120,13 +120,20 @@ static camera_config_t camera_config = {
     .pin_vsync = CAM_PIN_VSYNC,
     .pin_href = CAM_PIN_HREF,
     .pin_pclk = CAM_PIN_PCLK,
-
+#ifdef SOFTWARE_ENC
     .xclk_freq_hz = 24000000,
+#else
+    .xclk_freq_hz = 20000000,
+#endif
     .ledc_timer = LEDC_TIMER_0,
     .ledc_channel = LEDC_CHANNEL_0,
 
+#ifdef SOFTWARE_ENC
     .pixel_format = PIXFORMAT_YUV422,
-    .frame_size = FRAMESIZE_QVGA,
+#else
+    .pixel_format = PIXFORMAT_JPEG,
+#endif
+    .frame_size = VIDEO_FRAME_SIZE,
 
     .jpeg_quality = 12,     //0-63 lower number means higher quality
     .fb_count = 2,
@@ -166,8 +173,8 @@ int setup_audio()
 static void init_jpeg_encoder()
 {
     jpeg_enc_info_t info = { 0 };
-    info.width = VIDEO_WIDTH;
-    info.height = VIDEO_HEIGHT;
+    info.width = resolution[VIDEO_FRAME_SIZE].width;
+    info.height = resolution[VIDEO_FRAME_SIZE].height;
     info.src_type = JPEG_RAW_TYPE_YCbYCr;
     info.subsampling = JPEG_SUB_SAMPLE_YUV420;
     info.quality = 40;
@@ -435,7 +442,12 @@ static void _videoEnc(void* pv)
         if (pic) {
             jpeg_enc_msg_t enc;
             enc.buf = audio_calloc(1, VIDEO_SIZE);
+            #ifdef SOFTWARE_ENC
             jpeg_enc_process(rtc->jpeg_enc, pic->buf, pic->len, enc.buf, VIDEO_SIZE, &enc.size);
+            #else
+            memcpy(enc.buf, pic->buf, pic->len);
+            enc.size = pic->len;
+            #endif
             esp_camera_fb_return(pic);
             if (xQueueSend(rtc->encQ, &enc, 100 / portTICK_PERIOD_MS) != pdTRUE) {
                 ESP_LOGW(TAG, "send enc buf queue timeout !");
@@ -505,11 +517,14 @@ static int _send_video(unsigned char *data, unsigned int *len)
         memcpy(data, enc.buf, enc.size);
         audio_free(enc.buf);
         rtc->imageCnt ++;
-        if ((rtc->imageCnt%60) == 0) {
-            ESP_LOGI(TAG, "send video %.2f fps !", (float)rtc->imageCnt/(_sysnow() - rtc->sysTime));
+        if ((rtc->imageCnt%250) == 0) {
+            if (rtc->sysTime) {
+                ESP_LOGI(TAG, "send video %.2f fps !", (float)rtc->imageCnt/(_sysnow() - rtc->sysTime));
+            }
             rtc->sysTime = _sysnow();
             rtc->imageCnt = 0;
         }
+        // ESP_LOGI(TAG, "send video %d !", enc.size);
     }
 
     return ESP_OK;
@@ -588,9 +603,10 @@ esp_rtc_handle_t main_rtc_start(const char *uri)
 
     esp_rtc_video_info vCodecInfo = {
         .vcodec = RTC_VCODEC_JPEG,
-        .width = VIDEO_WIDTH,
-        .height = VIDEO_HEIGHT,
+        .width = resolution[VIDEO_FRAME_SIZE].width,
+        .height = resolution[VIDEO_FRAME_SIZE].height,
         .fps = VIDEO_FPS,
+        .len = VIDEO_SIZE,
     };
     esp_rtc_data_cb_t data_cb = {
         .send_audio = _send_audio,
