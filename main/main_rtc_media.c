@@ -48,7 +48,7 @@
 
 #define TAG	        "ESP_RTC_MEDIA"
 
-#define SOFTWARE_ENC
+// #define SOFTWARE_ENC
 #define VIDEO_FPS                   15
 #define VIDEO_FRAME_SIZE            FRAMESIZE_QVGA
 #define VIDEO_SIZE                  50*1024
